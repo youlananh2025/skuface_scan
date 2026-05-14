@@ -1,44 +1,47 @@
-<!DOCTYPE html>
-<html lang="th" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTS Attendance System | ມຂ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
-        body { font-family: 'Kanit', sans-serif; background: #f8fafc; }
-    </style>
-</head>
-<body class="h-full">
-    <div class="max-w-7xl mx-auto p-4 md:p-6">
-        <header class="glass rounded-2xl p-6 mb-8 shadow-lg flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold text-blue-900">DTS Attendance System</h1>
-                <p class="text-blue-600 text-sm">Faculty of Information Technology - ມຂ</p>
-            </div>
-            <div id="nav-menu" class="flex gap-2">
-                <button onclick="switchTab('dashboard')" class="px-4 py-2 rounded-lg bg-blue-600 text-white">Dashboard</button>
-                <button onclick="switchTab('attendance')" class="px-4 py-2 rounded-lg bg-white/50">สแกนใบหน้า</button>
-            </div>
-        </header>
+<style>
+    .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+    .dark .glass { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); }
+    body { font-family: 'Kanit', sans-serif; background: #f1f5f9; }
+</style>
 
-        <main id="main-content">
-            <div id="content-dashboard" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="glass p-6 rounded-2xl shadow-sm text-center">
-                    <h3 class="text-gray-500">มาเรียน</h3>
-                    <p id="stat-present" class="text-4xl font-bold text-emerald-600">0</p>
-                </div>
-                </div>
-        </main>
-    </div>
-    <script>
-        // รวม logic การจัดการ State ไว้ที่นี่
-        const apiCall = async (payload) => { /* ...fetch code... */ };
-        // ... (Functions for UI and AI logic)
-    </script>
-</body>
-</html>
+<script>
+    // ปรับค่าความแม่นยำ (0.4 - 0.5 จะเข้มงวดกว่า 0.6)
+    const RECOGNITION_THRESHOLD = 0.45; 
+
+    // ปรับปรุงฟังก์ชันการตรวจสอบใบหน้า
+    async function onVideoPlay() {
+        document.getElementById('video-loader').style.display = 'none';
+        document.getElementById('video-wrapper').classList.remove('hidden');
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const displaySize = { width: video.clientWidth, height: video.clientHeight };
+        faceapi.matchDimensions(overlay, displaySize);
+
+        if (recognitionInterval) clearInterval(recognitionInterval);
+        recognitionInterval = setInterval(async () => {
+            if (!isScanning) return;
+            
+            // เพิ่มการตรวจจับแบบ SSD MobileNetV1 ที่มีความแม่นยำสูงกว่า TinyFaceDetector
+            const detections = await faceapi.detectAllFaces(video)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+            
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+            
+            if (faceMatcher) {
+                resizedDetections.forEach(detection => {
+                    const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
+                    
+                    // ตรวจสอบความถูกต้องตาม Threshold ที่กำหนด
+                    if (bestMatch.distance < RECOGNITION_THRESHOLD) {
+                        const student = students.find(s => s.name === bestMatch.label);
+                        if (student && !checkedInToday.has(student.studentid)) {
+                             handleRecognition(student);
+                        }
+                    }
+                });
+            }
+        }, 500); // ปรับเพิ่มเวลา interval เล็กน้อยเพื่อลดภาระ CPU
+    }
+</script>
